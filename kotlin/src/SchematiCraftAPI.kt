@@ -10,10 +10,16 @@ import java.nio.file.*
  * Copy this file into your mod and customize as needed.
  * 
  * API Documentation: https://schematicraft.com/api/ingame/v1/docs
+ * 
+ * @param apiKey API key (must start with sk_live_ or sk_test_)
+ * @param baseUrl Base URL for the API (default: https://schematicraft.com)
+ * @param clientIdentifier Optional client identifier for telemetry. Format: name/version (platform)
+ *                         Example: "my-mod/1.0.0 (fabric)"
  */
 class SchematiCraftAPI(
     private val apiKey: String,
-    baseUrl: String = "https://schematicraft.com"
+    baseUrl: String = "https://schematicraft.com",
+    private val clientIdentifier: String? = null
 ) {
     private val baseUrl: String = "$baseUrl/api/ingame/v1"
     
@@ -204,6 +210,7 @@ class SchematiCraftAPI(
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.setRequestProperty("Authorization", "Bearer $apiKey")
         conn.setRequestProperty("Accept", "application/json")
+        clientIdentifier?.let { conn.setRequestProperty("X-Schematicraft-Client", it) }
         conn.connectTimeout = 30000
         conn.readTimeout = 60000
         return conn

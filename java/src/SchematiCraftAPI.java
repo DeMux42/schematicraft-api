@@ -16,17 +16,30 @@ public class SchematiCraftAPI {
     
     private final String baseUrl;
     private final String apiKey;
+    private final String clientIdentifier;
     
     public SchematiCraftAPI(String apiKey) {
-        this(apiKey, "https://schematicraft.com");
+        this(apiKey, "https://schematicraft.com", null);
     }
     
     public SchematiCraftAPI(String apiKey, String baseUrl) {
+        this(apiKey, baseUrl, null);
+    }
+    
+    /**
+     * Creates a new API client.
+     * @param apiKey API key (must start with sk_live_ or sk_test_)
+     * @param baseUrl Base URL for the API (default: https://schematicraft.com)
+     * @param clientIdentifier Optional client identifier for telemetry. Format: name/version (platform)
+     *                         Example: "my-mod/1.0.0 (fabric)"
+     */
+    public SchematiCraftAPI(String apiKey, String baseUrl, String clientIdentifier) {
         if (apiKey == null || !apiKey.startsWith("sk_")) {
             throw new IllegalArgumentException("API key must start with sk_live_ or sk_test_");
         }
         this.apiKey = apiKey;
         this.baseUrl = baseUrl + "/api/ingame/v1";
+        this.clientIdentifier = clientIdentifier;
     }
     
     // ========== Search ==========
@@ -180,6 +193,9 @@ public class SchematiCraftAPI {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setRequestProperty("Authorization", "Bearer " + apiKey);
         conn.setRequestProperty("Accept", "application/json");
+        if (clientIdentifier != null) {
+            conn.setRequestProperty("X-Schematicraft-Client", clientIdentifier);
+        }
         conn.setConnectTimeout(30000);
         conn.setReadTimeout(60000);
         return conn;

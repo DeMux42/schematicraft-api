@@ -25,9 +25,10 @@ public class SchematiCraftAPITest {
         }
         
         String baseUrl = System.getenv("SCHEMATICRAFT_API_URL");
+        String clientId = "java-test-client/1.0.0 (test)";
         SchematiCraftAPI api = baseUrl != null 
-            ? new SchematiCraftAPI(apiKey, baseUrl)
-            : new SchematiCraftAPI(apiKey);
+            ? new SchematiCraftAPI(apiKey, baseUrl, clientId)
+            : new SchematiCraftAPI(apiKey, "https://schematicraft.com", clientId);
         
         System.out.println("=== SchematiCraft API Tests (Java) ===\n");
         
