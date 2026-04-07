@@ -1,3 +1,5 @@
+package com.schematicraft.api;
+
 import java.nio.file.*;
 import java.util.UUID;
 import java.util.regex.*;
