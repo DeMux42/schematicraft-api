@@ -61,14 +61,20 @@ public class SchematiCraftAPI {
     
     /** Downloads schematic in original format. */
     public DownloadResult download(String schematicId, Path outputFile) throws IOException, APIException {
-        return download(schematicId, outputFile, null, null, null);
+        return download(schematicId, outputFile, null, null, null, null);
     }
     
     /** Downloads with optional format conversion. Generates X-Request-Id for idempotency. */
     public DownloadResult download(String schematicId, Path outputFile, String format, String targetVersion, String requestId) throws IOException, APIException {
+        return download(schematicId, outputFile, format, null, targetVersion, requestId);
+    }
+
+    /** Downloads with optional format conversion and target editor. */
+    public DownloadResult download(String schematicId, Path outputFile, String format, String targetEditor, String targetVersion, String requestId) throws IOException, APIException {
         StringBuilder url = new StringBuilder(baseUrl + "/schematics/" + schematicId + "/download");
         List<String> params = new ArrayList<>();
         if (format != null) params.add("format=" + format);
+        if (targetEditor != null) params.add("targetEditor=" + URLEncoder.encode(targetEditor, "UTF-8"));
         if (targetVersion != null) params.add("targetVersion=" + targetVersion);
         if (!params.isEmpty()) url.append("?").append(String.join("&", params));
         
@@ -170,6 +176,21 @@ public class SchematiCraftAPI {
      */
     public String getLibrary() throws IOException, APIException {
         return get(baseUrl + "/me/library");
+    }
+
+    // ========== Bundles ==========
+
+    /**
+     * Create a new bundle.
+     * @param name Bundle name (required)
+     * @param description Bundle description (optional)
+     * @return JSON with: id, name, description
+     */
+    public String createBundle(String name, String description) throws IOException, APIException {
+        StringBuilder json = new StringBuilder("{\"name\":\"" + escapeJson(name) + "\"");
+        if (description != null) json.append(",\"description\":\"").append(escapeJson(description)).append("\"");
+        json.append("}");
+        return post(baseUrl + "/bundles", json.toString());
     }
     
     // ========== HTTP Helpers ==========
