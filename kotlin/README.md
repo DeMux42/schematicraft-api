@@ -18,7 +18,6 @@ Dependency-free Kotlin client for the [Schematicraft](https://schematicraft.com)
   <summary>Contents</summary>
 
 - [About](#about)
-- [Parity With The Java Client](#parity-with-the-java-client)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
@@ -28,6 +27,7 @@ Dependency-free Kotlin client for the [Schematicraft](https://schematicraft.com)
   - [Library And Status](#library-and-status)
   - [Download](#download)
   - [Upload](#upload)
+  - [Bundles](#bundles)
   - [Feedback](#feedback)
 - [API Surface](#api-surface)
 - [Error Handling](#error-handling)
@@ -45,30 +45,14 @@ Note that this file declares no package and lives at the root of `src`. If you v
 
 Every method returns the raw JSON response as a `String`. Parse it with whatever you already have.
 
-## Parity With The Java Client
-
-Java is the reference implementation and this port trails it. Currently missing here:
-
-| Capability                                        | Java | Kotlin |
-| ------------------------------------------------- | ---- | ------ |
-| `targetEditor` on download                        | Yes  | No     |
-| Screenshot images on upload                       | Yes  | No     |
-| `createBundle`                                    | Yes  | No     |
-| Feedback with MC version, loader, modpack         | Yes  | No     |
-| Extended upload read timeout                      | Yes  | No     |
-| Mid-stream upload rejection reported as HTTP code | Yes  | No     |
-
-Two of these are worth knowing about before you rely on this client. Without `targetEditor` you cannot disambiguate formats that several tools share, such as `.nbt` for both Create and vanilla structure blocks. And without mid-stream error reporting, a server-side rejection during upload, a 413 for instance, surfaces as a generic `IOException` rather than the real status.
-
-If you need any of these today, use the [Java client](../java/README.md). It is callable from Kotlin without ceremony.
-
-Contributions closing these gaps are welcome. See [Contributing](../README.md#contributing).
+This client is at feature parity with the [Java client](../java/README.md) and ships at the same version. See [the parity rule](../README.md#versioning-and-the-parity-rule) before changing either one.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Kotlin 1.9 or newer, and a JDK 21 or newer
+- Kotlin 1.4 or newer
+- A JDK 11 or newer, because the client uses `java.nio.file.Path.of`. If you compile with an old Kotlin that defaults to JVM target 1.6, pass `-jvm-target 1.8`.
 - An API key from [schematicraft.com/profile#ingame-api-keys](https://schematicraft.com/profile#ingame-api-keys)
 
 ### Installation
@@ -144,6 +128,8 @@ val requestId = UUID.randomUUID().toString()
 
 try {
     val dl = api.download(id, Path.of("out.litematic"), format = "litematic", targetVersion = "1.21.1", requestId = requestId)
+    // targetEditor disambiguates formats several tools share:
+    // api.download(id, Path.of("out.nbt"), format = "nbt", targetEditor = "create", targetVersion = "1.21.1", requestId = requestId)
     println("Saved ${dl.file} as download ${dl.downloadId}")
 } catch (e: SchematiCraftAPI.AnalysisPendingException) {
     Thread.sleep(e.retryAfterSeconds * 1000L)
@@ -176,7 +162,8 @@ api.upload(
     loader = "neoforge",
     tags = "castle,medieval",
     isPublished = true,
-    bundleId = bundleId
+    bundleId = bundleId,
+    images = listOf(Path.of("shot1.png"), Path.of("shot2.png"))
 )
 ```
 
@@ -190,17 +177,43 @@ api.upload(
 | `tags`             | No       | Comma separated                                   |
 | `isPublished`      | No       | `true` is public, default is private              |
 | `bundleId`         | No       | Bundle to add to, must be yours                   |
+| `images`           | No       | PNG or JPEG screenshots                           |
 
-Server-side limits apply: 50 MB per schematic and 100 MB total per request. Exceeding them returns 413, which this client currently surfaces as an `IOException` rather than an `APIException`.
+Server-side limits apply: 50 MB per schematic, 10 MB per image, at most 5 images, 100 MB total per request. Exceeding them returns 413.
+
+If the server rejects a request part way through the upload, the client reads the actual response and throws `APIException` with the real status and body, rather than surfacing a bare broken-pipe `IOException`. That distinction matters: a 413 looks like a network failure otherwise.
+
+### Bundles
+
+```kotlin
+val bundle = api.createBundle("Castle Builds", "Everything medieval")
+```
+
+Returns `id`, `name`, and `description`. Use that `id` as `bundleId` when uploading.
 
 ### Feedback
 
 ```kotlin
 api.submitFeedback(dl.downloadId!!, "worked")
-api.submitFeedback(dl.downloadId!!, "had_issues", "missing_or_wrong_blocks", "Stairs faced the wrong way")
+```
+
+With detail, which is worth sending when something went wrong:
+
+```kotlin
+api.submitFeedback(
+    downloadId = dl.downloadId!!,
+    outcome = "had_issues",
+    issueCategory = "missing_or_wrong_blocks",
+    notes = "Stairs came in facing the wrong way",
+    minecraftVersion = "1.21.1",
+    modLoader = "neoforge",
+    modpack = "ATM11"
+)
 ```
 
 Outcomes are `worked`, `had_issues`, and `didnt_work`. Anything other than `worked` should carry an issue category: `import_error_or_crash`, `missing_or_wrong_blocks`, `wrong_orientation`, `file_seems_corrupt`, or `other`.
+
+Feedback is what tells us a conversion path is broken, so send it when a user reports trouble.
 
 ## API Surface
 
@@ -211,11 +224,14 @@ Outcomes are `worked`, `had_issues`, and `didnt_work`. Anything other than `work
 | `search(query, page, limit)`                                                              | `GET /search`                  |
 | `searchAI(query, page, limit)`                                                            | `POST /search/ai`              |
 | `download(schematicId, outputFile)`                                                       | `GET /schematics/:id/download` |
-| `download(schematicId, outputFile, format, targetVersion, requestId)`                     | same, with conversion          |
+| `download(schematicId, outputFile, format, targetEditor, targetVersion, requestId)`       | same, with conversion          |
 | `upload(file, title, minecraftVersion, loader)`                                           | `POST /schematics`             |
 | `upload(file, title, description, minecraftVersion, loader, tags)`                        | same                           |
 | `upload(file, title, description, minecraftVersion, loader, tags, isPublished, bundleId)` | same                           |
+| `upload(..., isPublished, bundleId, images)`                                              | same, with screenshots         |
+| `createBundle(name, description)`                                                         | `POST /bundles`                |
 | `submitFeedback(downloadId, outcome, issueCategory, notes)`                               | `POST /downloads/:id/feedback` |
+| `submitFeedback(..., notes, minecraftVersion, modLoader, modpack)`                        | same, with context             |
 
 ## Error Handling
 
@@ -232,12 +248,13 @@ The API key never appears in an exception message.
 
 ## Timeouts
 
-| Phase   | Timeout |
-| ------- | ------- |
-| Connect | 30 s    |
-| Read    | 60 s    |
+| Phase         | Timeout |
+| ------------- | ------- |
+| Connect       | 30 s    |
+| Read          | 60 s    |
+| Read, uploads | 180 s   |
 
-Uploads use the same 60 second read timeout as everything else, unlike the Java client. A large upload on a slow connection can time out here.
+Uploads get the longer read timeout because a large schematic with screenshots is processed server side before the response arrives.
 
 ## Testing
 
@@ -260,7 +277,7 @@ Distributed under the MIT License. See [`LICENSE`](../LICENSE) for details.
 
 [license-shield]: https://img.shields.io/badge/license-MIT-blue.svg
 [license-url]: ../LICENSE
-[kotlin-shield]: https://img.shields.io/badge/Kotlin-1.9-7F52FF.svg
+[kotlin-shield]: https://img.shields.io/badge/Kotlin-1.4%2B-7F52FF.svg
 [kotlin-url]: https://kotlinlang.org/
 [api-shield]: https://img.shields.io/badge/API-v1-brightgreen.svg
 [api-url]: https://schematicraft.com/api/ingame/v1/docs

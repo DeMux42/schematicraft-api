@@ -41,7 +41,7 @@ Dependency-free Java client for the [Schematicraft](https://schematicraft.com) I
 
 One source file, `src/com/schematicraft/api/SchematiCraftAPI.java`, in package `com.schematicraft.api`. Standard library only, so it adds nothing to your shaded jar.
 
-This is the reference client. New API capabilities land here first, then get ported to the other languages.
+Current version is in `SchematiCraftAPI.CLIENT_VERSION`. This client is at feature parity with the [Kotlin client](../kotlin/README.md) and ships at the same version. See [the parity rule](../README.md#versioning-and-the-parity-rule) before changing either one.
 
 Every method returns the raw JSON response as a `String`. Parse it with whatever JSON library your project already has; Minecraft ships Gson.
 
@@ -231,8 +231,8 @@ Feedback is what tells us a conversion path is broken, so send it when a user re
 | ------------------------------------------------------------------------------------------ | ------------------------------ |
 | `getStatus()`                                                                              | `GET /me/status`               |
 | `getLibrary()`                                                                             | `GET /me/library`              |
-| `search(query, page, limit)`                                                               | `GET /search`                  |
-| `searchAI(query)`                                                                          | `POST /search/ai`              |
+| `search(query)` and `search(query, page, limit)`                                           | `GET /search`                  |
+| `searchAI(query)` and `searchAI(query, page, limit)`                                       | `POST /search/ai`              |
 | `download(id, out)`                                                                        | `GET /schematics/:id/download` |
 | `download(id, out, format, targetVersion, requestId)`                                      | same, with conversion          |
 | `download(id, out, format, targetEditor, targetVersion, requestId)`                        | same, with editor              |

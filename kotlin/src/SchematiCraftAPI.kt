@@ -22,7 +22,21 @@ class SchematiCraftAPI(
     private val clientIdentifier: String? = null
 ) {
     private val baseUrl: String = "$baseUrl/api/ingame/v1"
-    
+
+    companion object {
+        /**
+         * Version of this client library.
+         *
+         * The Java and Kotlin clients are released in lockstep: they expose the same
+         * surface and carry the same version. If you change one, change both, and bump
+         * this constant in both files. See the repository README for the release rule.
+         */
+        const val CLIENT_VERSION = "1.1.0"
+
+        /** Read timeout for uploads. Large files with images are processed server side. */
+        private const val UPLOAD_READ_TIMEOUT_MS = 180000
+    }
+
     init {
         require(apiKey.startsWith("sk_")) { 
             "API key must start with sk_live_ or sk_test_" 
@@ -45,20 +59,29 @@ class SchematiCraftAPI(
     
     /** Downloads schematic in original format. */
     fun download(schematicId: String, outputFile: Path): DownloadResult {
-        return download(schematicId, outputFile, null, null, null)
+        return download(schematicId, outputFile, null, null, null, null)
     }
     
-    /** Downloads with optional format conversion. Generates X-Request-Id for idempotency. */
+    /**
+     * Downloads with optional format conversion. Pass a stable requestId and reuse it
+     * on every retry of the same logical download so quota is only consumed once.
+     *
+     * @param targetEditor Disambiguates formats shared by several tools, for example
+     *                     "create" versus vanilla for .nbt. Omit to let the server pick.
+     */
     fun download(
         schematicId: String,
         outputFile: Path,
         format: String? = null,
+        targetEditor: String? = null,
         targetVersion: String? = null,
         requestId: String? = null
     ): DownloadResult {
         val params = mutableListOf<String>()
         format?.let { params.add("format=$it") }
+        targetEditor?.let { params.add("targetEditor=${URLEncoder.encode(it, "UTF-8")}") }
         targetVersion?.let { params.add("targetVersion=$it") }
+        params.add("force=true")
         
         val url = buildString {
             append("$baseUrl/schematics/$schematicId/download")
@@ -104,7 +127,7 @@ class SchematiCraftAPI(
         minecraftVersion: String,
         loader: String
     ): String {
-        return upload(file, title, null, minecraftVersion, loader, null, false, null)
+        return upload(file, title, null, minecraftVersion, loader, null, false, null, null)
     }
 
     /** Uploads schematic with streaming (no full file buffering). */
@@ -116,13 +139,14 @@ class SchematiCraftAPI(
         loader: String,
         tags: String? = null
     ): String {
-        return upload(file, title, description, minecraftVersion, loader, tags, false, null)
+        return upload(file, title, description, minecraftVersion, loader, tags, false, null, null)
     }
     
     /**
      * Uploads schematic with full options.
      * @param isPublished If true, schematic is immediately public. Default is private.
      * @param bundleId Optional bundle ID to add the schematic to (must own the bundle).
+     * @param images Optional list of image file paths (PNG/JPEG) to attach as screenshots.
      */
     fun upload(
         file: Path,
@@ -132,7 +156,8 @@ class SchematiCraftAPI(
         loader: String,
         tags: String? = null,
         isPublished: Boolean = false,
-        bundleId: String? = null
+        bundleId: String? = null,
+        images: List<Path>? = null
     ): String {
         val boundary = "----SchematiCraft${System.currentTimeMillis()}"
         val conn = openConnection("$baseUrl/schematics")
@@ -140,18 +165,37 @@ class SchematiCraftAPI(
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
         conn.doOutput = true
         conn.setChunkedStreamingMode(8192) // Stream in 8KB chunks
-        
-        conn.outputStream.use { out ->
-            writeField(out, boundary, "minecraftVersion", minecraftVersion)
-            writeField(out, boundary, "loader", loader)
-            title?.let { writeField(out, boundary, "title", it) }
-            description?.let { writeField(out, boundary, "description", it) }
-            tags?.let { writeField(out, boundary, "tags", it) }
-            if (isPublished) writeField(out, boundary, "isPublished", "true")
-            bundleId?.let { writeField(out, boundary, "bundleId", it) }
-            // Stream file directly without loading into memory
-            writeFileStreaming(out, boundary, "file", file)
-            out.write("--$boundary--\r\n".toByteArray(StandardCharsets.UTF_8))
+        conn.readTimeout = UPLOAD_READ_TIMEOUT_MS
+
+        try {
+            conn.outputStream.use { out ->
+                writeField(out, boundary, "minecraftVersion", minecraftVersion)
+                writeField(out, boundary, "loader", loader)
+                title?.let { writeField(out, boundary, "title", it) }
+                description?.let { writeField(out, boundary, "description", it) }
+                tags?.let { writeField(out, boundary, "tags", it) }
+                if (isPublished) writeField(out, boundary, "isPublished", "true")
+                bundleId?.let { writeField(out, boundary, "bundleId", it) }
+                // Stream file directly without loading into memory
+                writeFileStreaming(out, boundary, "file", file)
+                images?.forEach { writeFileStreaming(out, boundary, "images", it) }
+                out.write("--$boundary--\r\n".toByteArray(StandardCharsets.UTF_8))
+            }
+        } catch (writeEx: IOException) {
+            // Server rejected the request mid-stream. Read the actual error response,
+            // otherwise a 413 surfaces as an unhelpful broken pipe.
+            try {
+                val status = conn.responseCode
+                val body = readError(conn)
+                throw APIException("Upload rejected (HTTP $status): $body", body, status)
+            } catch (ae: APIException) {
+                throw ae
+            } catch (readEx: Exception) {
+                throw IOException(
+                    "${writeEx.message} (server response unreadable: ${readEx.message})",
+                    writeEx
+                )
+            }
         }
         
         return readResponse(conn)
@@ -166,10 +210,35 @@ class SchematiCraftAPI(
         issueCategory: String? = null,
         notes: String? = null
     ): String {
+        return submitFeedback(downloadId, outcome, issueCategory, notes, null, null, null)
+    }
+
+    /**
+     * Submit detailed feedback for a download.
+     * @param outcome "worked", "had_issues", "didnt_work"
+     * @param issueCategory Required if outcome != "worked". One of: "import_error_or_crash",
+     *                      "missing_or_wrong_blocks", "wrong_orientation", "file_seems_corrupt", "other"
+     * @param notes Free text notes about the issue
+     * @param minecraftVersion e.g. "1.21.1"
+     * @param modLoader e.g. "neoforge", "fabric", "forge"
+     * @param modpack Optional modpack name
+     */
+    fun submitFeedback(
+        downloadId: String,
+        outcome: String,
+        issueCategory: String? = null,
+        notes: String? = null,
+        minecraftVersion: String? = null,
+        modLoader: String? = null,
+        modpack: String? = null
+    ): String {
         val json = buildString {
-            append("""{"outcome":"$outcome"""")
-            issueCategory?.let { append(""","issueCategory":"$it"""") }
+            append("""{"outcome":"${escapeJson(outcome)}"""")
+            issueCategory?.let { append(""","issueCategory":"${escapeJson(it)}"""") }
             notes?.let { append(""","additionalNotes":"${escapeJson(it)}"""") }
+            minecraftVersion?.let { append(""","minecraftVersion":"${escapeJson(it)}"""") }
+            modLoader?.let { append(""","modLoader":"${escapeJson(it)}"""") }
+            modpack?.let { append(""","modpack":"${escapeJson(it)}"""") }
             append("}")
         }
         return post("$baseUrl/downloads/$downloadId/feedback", json)
@@ -186,6 +255,23 @@ class SchematiCraftAPI(
      * Returns JSON with: bundles (array with schematics) and unbundled (schematics not in any bundle).
      */
     fun getLibrary(): String = get("$baseUrl/me/library")
+
+    // ========== Bundles ==========
+
+    /**
+     * Create a new bundle.
+     * @param name Bundle name (required)
+     * @param description Bundle description (optional)
+     * @return JSON with: id, name, description
+     */
+    fun createBundle(name: String, description: String? = null): String {
+        val json = buildString {
+            append("""{"name":"${escapeJson(name)}"""")
+            description?.let { append(""","description":"${escapeJson(it)}"""") }
+            append("}")
+        }
+        return post("$baseUrl/bundles", json)
+    }
     
     // ========== HTTP Helpers ==========
     

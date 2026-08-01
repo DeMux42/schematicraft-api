@@ -52,14 +52,32 @@ Reference consumer: [schematicraft-mod](https://github.com/DeMux42/schematicraft
 
 ### Available Clients
 
-| Language   | Status              | Directory            | Notes                                |
-| ---------- | ------------------- | -------------------- | ------------------------------------ |
-| Java       | Stable, reference   | [java/](./java/)     | Packaged, Gradle build, full surface |
-| Kotlin     | Usable, trails Java | [kotlin/](./kotlin/) | Single file, no package, see gaps    |
-| Python     | Planned             | -                    |                                      |
-| TypeScript | Planned             | -                    |                                      |
+| Language   | Version | Directory            | Notes                               |
+| ---------- | ------- | -------------------- | ----------------------------------- |
+| Java       | 1.1.0   | [java/](./java/)     | Packaged, Gradle build              |
+| Kotlin     | 1.1.0   | [kotlin/](./kotlin/) | Single file, no package declaration |
+| Python     | Planned | -                    |                                     |
+| TypeScript | Planned | -                    |                                     |
 
-The Java client is the reference implementation. When the API gains a capability, Java gets it first. Kotlin currently lacks target-editor downloads, image attachments, bundle creation, and the extended feedback fields. See [kotlin/README.md](./kotlin/README.md#parity-with-the-java-client) for the current list.
+### Versioning And The Parity Rule
+
+**The clients ship in lockstep.** Java and Kotlin expose the same surface and carry the same version number. A change to one is a change to both, in the same release. There is no reference implementation that the others trail, because a client that silently lacks a capability is worse than no client at all.
+
+The version lives in three places that have to agree. A single-file vendored library cannot derive them from each other, so this is a manual invariant:
+
+- `SchematiCraftAPI.CLIENT_VERSION` in `java/src/com/schematicraft/api/SchematiCraftAPI.java`
+- `SchematiCraftAPI.CLIENT_VERSION` in `kotlin/src/SchematiCraftAPI.kt`
+- `version` in `java/build.gradle`
+
+Semver has real teeth here, because callers compile against these:
+
+| Bump  | Meaning                                               |
+| ----- | ----------------------------------------------------- |
+| PATCH | Bug fix, no signature change                          |
+| MINOR | New methods or overloads, existing calls keep working |
+| MAJOR | An existing signature or behavior changed             |
+
+Adding an overload is a MINOR. Changing what an existing parameter means is a MAJOR even if it still compiles.
 
 ### Design Goals
 
@@ -132,16 +150,18 @@ Full per-language examples are in [java/README.md](./java/README.md) and [kotlin
 
 Base path is `/api/ingame/v1`. The client prepends it, so you pass only the host.
 
-| Method | Endpoint                   | Purpose                           | Java | Kotlin |
-| ------ | -------------------------- | --------------------------------- | ---- | ------ |
-| GET    | `/me/status`               | User info, quotas, formats        | Yes  | Yes    |
-| GET    | `/me/library`              | Bundles plus unbundled schematics | Yes  | Yes    |
-| GET    | `/search`                  | Keyword search                    | Yes  | Yes    |
-| POST   | `/search/ai`               | Natural language search           | Yes  | Yes    |
-| GET    | `/schematics/:id/download` | Download, optionally converted    | Yes  | Yes    |
-| POST   | `/schematics`              | Upload                            | Yes  | Yes    |
-| POST   | `/bundles`                 | Create a bundle                   | Yes  | No     |
-| POST   | `/downloads/:id/feedback`  | Report how a download went        | Yes  | Yes    |
+Both clients cover all of it. An endpoint added to one must be added to the other in the same change.
+
+| Method | Endpoint                   | Purpose                           |
+| ------ | -------------------------- | --------------------------------- |
+| GET    | `/me/status`               | User info, quotas, formats        |
+| GET    | `/me/library`              | Bundles plus unbundled schematics |
+| GET    | `/search`                  | Keyword search                    |
+| POST   | `/search/ai`               | Natural language search           |
+| GET    | `/schematics/:id/download` | Download, optionally converted    |
+| POST   | `/schematics`              | Upload, with optional screenshots |
+| POST   | `/bundles`                 | Create a bundle                   |
+| POST   | `/downloads/:id/feedback`  | Report how a download went        |
 
 `/me/status` is also the cheapest way to validate a key. Call it once after the user pastes one.
 
@@ -237,7 +257,7 @@ If a key is exposed, revoke it from the In-Game API Keys tab. Revocation is imme
 - [x] Streaming uploads with image attachments
 - [x] Idempotent downloads with quota-safe retry
 - [x] Bundle creation
-- [ ] Kotlin parity with Java
+- [x] Java and Kotlin at feature parity, released in lockstep
 - [ ] Palette endpoints
 - [ ] Gradle wrapper for the Java module
 - [ ] Python client

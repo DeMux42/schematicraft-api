@@ -15,7 +15,16 @@ import java.util.*;
  * API Documentation: https://schematicraft.com/api/ingame/v1/docs
  */
 public class SchematiCraftAPI {
-    
+
+    /**
+     * Version of this client library.
+     *
+     * The Java and Kotlin clients are released in lockstep: they expose the same
+     * surface and carry the same version. If you change one, change both, and bump
+     * this constant in both files. See the repository README for the release rule.
+     */
+    public static final String CLIENT_VERSION = "1.1.0";
+
     private final String baseUrl;
     private final String apiKey;
     private final String clientIdentifier;
@@ -46,14 +55,24 @@ public class SchematiCraftAPI {
     
     // ========== Search ==========
     
+    /** Keyword search, first page of 20. */
+    public String search(String query) throws IOException, APIException {
+        return search(query, 1, 20);
+    }
+
     public String search(String query, int page, int limit) throws IOException, APIException {
         String url = baseUrl + "/search?query=" + URLEncoder.encode(query, "UTF-8") 
                    + "&page=" + page + "&limit=" + limit;
         return get(url);
     }
     
+    /** Natural language search. Consumes AI quota. */
     public String searchAI(String query) throws IOException, APIException {
-        String json = "{\"query\":\"" + escapeJson(query) + "\"}";
+        return searchAI(query, 1, 20);
+    }
+
+    public String searchAI(String query, int page, int limit) throws IOException, APIException {
+        String json = "{\"query\":\"" + escapeJson(query) + "\",\"page\":" + page + ",\"limit\":" + limit + "}";
         return post(baseUrl + "/search/ai", json);
     }
     

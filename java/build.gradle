@@ -4,7 +4,10 @@ plugins {
 }
 
 group = 'com.schematicraft'
-version = '1.0.0'
+
+// Keep in lockstep with SchematiCraftAPI.CLIENT_VERSION in both the Java and the
+// Kotlin client. The two clients ship the same surface at the same version.
+version = '1.1.0'
 
 java {
     toolchain {
