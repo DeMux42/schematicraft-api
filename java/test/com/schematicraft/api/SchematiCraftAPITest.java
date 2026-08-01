@@ -11,8 +11,8 @@ import java.util.regex.*;
  * Run with:
  *   export SCHEMATICRAFT_API_KEY=sk_test_...
  *   export SCHEMATICRAFT_API_URL=http://localhost:3000  # for local dev
- *   javac -d test/out src/SchematiCraftAPI.java test/SchematiCraftAPITest.java
- *   java -cp test/out SchematiCraftAPITest
+ *   javac -d test/out src/com/schematicraft/api/SchematiCraftAPI.java test/com/schematicraft/api/SchematiCraftAPITest.java
+ *   java -cp test/out com.schematicraft.api.SchematiCraftAPITest
  */
 public class SchematiCraftAPITest {
     
