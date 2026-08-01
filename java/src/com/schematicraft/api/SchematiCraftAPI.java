@@ -76,6 +76,7 @@ public class SchematiCraftAPI {
         if (format != null) params.add("format=" + format);
         if (targetEditor != null) params.add("targetEditor=" + URLEncoder.encode(targetEditor, "UTF-8"));
         if (targetVersion != null) params.add("targetVersion=" + targetVersion);
+        params.add("force=true");
         if (!params.isEmpty()) url.append("?").append(String.join("&", params));
         
         HttpURLConnection conn = openConnection(url.toString());
@@ -119,7 +120,7 @@ public class SchematiCraftAPI {
     
     /** Uploads schematic with streaming (no full file buffering). */
     public String upload(Path file, String title, String description, String minecraftVersion, String loader, String tags) throws IOException, APIException {
-        return upload(file, title, description, minecraftVersion, loader, tags, false, null);
+        return upload(file, title, description, minecraftVersion, loader, tags, false, null, null);
     }
     
     /** 
@@ -128,24 +129,51 @@ public class SchematiCraftAPI {
      * @param bundleId Optional bundle ID to add the schematic to (must own the bundle).
      */
     public String upload(Path file, String title, String description, String minecraftVersion, String loader, String tags, boolean isPublished, String bundleId) throws IOException, APIException {
+        return upload(file, title, description, minecraftVersion, loader, tags, isPublished, bundleId, null);
+    }
+
+    /**
+     * Uploads schematic with full options including screenshot images.
+     * @param images Optional list of image file paths (PNG/JPEG) to attach as screenshots.
+     */
+    public String upload(Path file, String title, String description, String minecraftVersion, String loader, String tags, boolean isPublished, String bundleId, List<Path> images) throws IOException, APIException {
         String boundary = "----SchematiCraft" + System.currentTimeMillis();
         HttpURLConnection conn = openConnection(baseUrl + "/schematics");
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
         conn.setDoOutput(true);
         conn.setChunkedStreamingMode(8192); // Stream in 8KB chunks
+        conn.setReadTimeout(180000); // 3 min for large uploads with images
         
-        try (OutputStream out = conn.getOutputStream()) {
-            writeField(out, boundary, "minecraftVersion", minecraftVersion);
-            writeField(out, boundary, "loader", loader);
-            if (title != null) writeField(out, boundary, "title", title);
-            if (description != null) writeField(out, boundary, "description", description);
-            if (tags != null) writeField(out, boundary, "tags", tags);
-            if (isPublished) writeField(out, boundary, "isPublished", "true");
-            if (bundleId != null) writeField(out, boundary, "bundleId", bundleId);
-            // Stream file directly without loading into memory
-            writeFileStreaming(out, boundary, "file", file);
-            out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        try {
+            try (OutputStream out = conn.getOutputStream()) {
+                writeField(out, boundary, "minecraftVersion", minecraftVersion);
+                writeField(out, boundary, "loader", loader);
+                if (title != null) writeField(out, boundary, "title", title);
+                if (description != null) writeField(out, boundary, "description", description);
+                if (tags != null) writeField(out, boundary, "tags", tags);
+                if (isPublished) writeField(out, boundary, "isPublished", "true");
+                if (bundleId != null) writeField(out, boundary, "bundleId", bundleId);
+                writeFileStreaming(out, boundary, "file", file);
+                if (images != null) {
+                    for (Path imagePath : images) {
+                        writeFileStreaming(out, boundary, "images", imagePath);
+                    }
+                }
+                out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (IOException writeEx) {
+            // Server rejected the request mid-stream. Read the actual error response.
+            try {
+                int status = conn.getResponseCode();
+                String body = readError(conn);
+                throw new APIException("Upload rejected (HTTP " + status + "): " + body, body, status);
+            } catch (APIException ae) {
+                throw ae;
+            } catch (Exception readEx) {
+                // Could not read server response either
+                throw new IOException(writeEx.getMessage() + " (server response unreadable: " + readEx.getMessage() + ")", writeEx);
+            }
         }
         
         return readResponse(conn);
@@ -155,9 +183,26 @@ public class SchematiCraftAPI {
     
     /** Submit feedback for a download. outcome: "worked", "had_issues", "didnt_work" */
     public String submitFeedback(String downloadId, String outcome, String issueCategory, String notes) throws IOException, APIException {
-        StringBuilder json = new StringBuilder("{\"outcome\":\"" + outcome + "\"");
-        if (issueCategory != null) json.append(",\"issueCategory\":\"").append(issueCategory).append("\"");
+        return submitFeedback(downloadId, outcome, issueCategory, notes, null, null, null);
+    }
+
+    /**
+     * Submit detailed feedback for a download.
+     * @param outcome "worked", "had_issues", "didnt_work"
+     * @param issueCategory Required if outcome != "worked". One of: "import_error_or_crash", "missing_or_wrong_blocks", "wrong_orientation", "file_seems_corrupt", "other"
+     * @param notes Free text notes about the issue
+     * @param minecraftVersion e.g. "1.21.1"
+     * @param modLoader e.g. "neoforge", "fabric", "forge"
+     * @param modpack Optional modpack name
+     */
+    public String submitFeedback(String downloadId, String outcome, String issueCategory, String notes,
+                                  String minecraftVersion, String modLoader, String modpack) throws IOException, APIException {
+        StringBuilder json = new StringBuilder("{\"outcome\":\"" + escapeJson(outcome) + "\"");
+        if (issueCategory != null) json.append(",\"issueCategory\":\"").append(escapeJson(issueCategory)).append("\"");
         if (notes != null) json.append(",\"additionalNotes\":\"").append(escapeJson(notes)).append("\"");
+        if (minecraftVersion != null) json.append(",\"minecraftVersion\":\"").append(escapeJson(minecraftVersion)).append("\"");
+        if (modLoader != null) json.append(",\"modLoader\":\"").append(escapeJson(modLoader)).append("\"");
+        if (modpack != null) json.append(",\"modpack\":\"").append(escapeJson(modpack)).append("\"");
         json.append("}");
         return post(baseUrl + "/downloads/" + downloadId + "/feedback", json.toString());
     }
