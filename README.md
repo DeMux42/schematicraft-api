@@ -18,7 +18,7 @@ Full API documentation (Swagger/OpenAPI): https://schematicraft.com/api/ingame/v
 ## Getting an API Key
 
 1. Create an account at [schematicraft.com](https://schematicraft.com)
-2. Go to your profile → "In-Game API Keys" tab: **https://schematicraft.com/profile#ingame-api-keys**
+2. Open your profile and go to the "In-Game API Keys" tab: **https://schematicraft.com/profile#ingame-api-keys**
 3. Create a new API key
 
 For in-game mods, direct users to this URL to obtain their API key:
