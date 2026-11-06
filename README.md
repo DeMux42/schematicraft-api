@@ -1,5 +1,7 @@
 <a id="readme-top"></a>
 
+<!-- Structure adapted from othneildrew/Best-README-Template, credited in Acknowledgments. -->
+
 <div align="center">
 
 # Schematicraft API Clients
@@ -22,7 +24,9 @@ Drop one file into your mod, plugin, or tool and you have search, download, uplo
 
 - [About The Project](#about-the-project)
   - [Available Clients](#available-clients)
+  - [Versioning And The Parity Rule](#versioning-and-the-parity-rule)
   - [Design Goals](#design-goals)
+  - [Built With](#built-with)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Get An API Key](#get-an-api-key)
@@ -39,6 +43,8 @@ Drop one file into your mod, plugin, or tool and you have search, download, uplo
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
+- [Contact](#contact)
+- [Acknowledgments](#acknowledgments)
 
 </details>
 
@@ -91,6 +97,18 @@ Adding an overload is a MINOR. Changing what an existing parameter means is a MA
 
 **Keys stay quiet.** The API key is never logged and never included in an exception message.
 
+### Built With
+
+[![Java][java-shield]][java-url]
+[![Kotlin][kotlin-shield]][kotlin-url]
+[![Gradle][gradle-shield]][gradle-url]
+
+- Java 21, set by the Gradle toolchain in `java/build.gradle`. The Java client imports only `java.io`, `java.net`, `java.nio` and `java.util`.
+- Kotlin 1.4 or newer, on a JDK 11 or newer, for the Kotlin client, built with `kotlinc`. It imports only JDK packages.
+- Gradle, with the `java-library` and `maven-publish` plugins, for the Java build. No wrapper is committed, so it uses the Gradle on your PATH.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
 ## Getting Started
 
 ### Prerequisites
@@ -128,6 +146,8 @@ gradle build
 The jar lands in `java/build/libs`. A `maven-publish` configuration is present, publishing as `com.schematicraft:api-client`.
 
 There is no Gradle wrapper committed yet, so this needs Gradle on your PATH. Use the vendoring route if you would rather not install it.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## Usage
 
@@ -214,6 +234,8 @@ SchematiCraftAPI api = new SchematiCraftAPI(apiKey, "https://schematicraft.com",
 
 Format is `name/version (platform)`, for example `bg2-connector/1.4.2 (fabric)` or `litematic-bridge/0.9.0 (paper)`. Requests behave identically without it.
 
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
 ## Local Development
 
 Point the client at a local backend with the base URL argument, or the `SCHEMATICRAFT_API_URL` environment variable when using the bundled `main` entry point:
@@ -224,6 +246,8 @@ export SCHEMATICRAFT_API_URL=http://localhost:3000
 ```
 
 Use an `sk_test_` key against a local backend. Do not point a production key at a development host.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## Testing
 
@@ -239,6 +263,8 @@ java -cp test/out com.schematicraft.api.SchematiCraftAPITest
 
 These tests upload and download real data and consume real quota. Run them against a local backend with a test key.
 
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
 ## Security
 
 Treat an API key as a password. It grants full access to the owner's library.
@@ -249,6 +275,8 @@ Treat an API key as a password. It grants full access to the owner's library.
 - Serve requests over HTTPS. Plain HTTP is for loopback only.
 
 If a key is exposed, revoke it from the In-Game API Keys tab. Revocation is immediate.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
 
 ## Roadmap
 
@@ -265,6 +293,8 @@ If a key is exposed, revoke it from the In-Game API Keys tab. Revocation is imme
 
 See [open issues][issues-url] for the full list.
 
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
 ## Contributing
 
 Issues and pull requests are welcome.
@@ -278,9 +308,26 @@ Two things to know before you start. Keep the clients dependency-free and keep e
 
 When adding a method, add it to the Java client first, then port it. Java is the reference, and the endpoint coverage table above should be updated in the same change.
 
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
 ## License
 
 Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
+## Contact
+
+DeMux - [@DeMux42](https://github.com/DeMux42)
+
+Project link: [https://github.com/DeMux42/schematicraft-api](https://github.com/DeMux42/schematicraft-api)
+
+<p align="right"><a href="#readme-top">Back to top</a></p>
+
+## Acknowledgments
+
+- [Best-README-Template](https://github.com/othneildrew/Best-README-Template) by othneildrew, for this README's structure.
+- [Shields.io](https://shields.io) for the badges.
 
 <p align="right"><a href="#readme-top">Back to top</a></p>
 
@@ -292,3 +339,7 @@ Distributed under the MIT License. See [`LICENSE`](LICENSE) for details.
 [api-url]: https://schematicraft.com/api/ingame/v1/docs
 [issues-shield]: https://img.shields.io/github/issues/DeMux42/schematicraft-api.svg
 [issues-url]: https://github.com/DeMux42/schematicraft-api/issues
+[kotlin-shield]: https://img.shields.io/badge/Kotlin-1.4%2B-7F52FF.svg
+[kotlin-url]: https://kotlinlang.org/
+[gradle-shield]: https://img.shields.io/badge/Gradle-02303A.svg
+[gradle-url]: https://gradle.org/
